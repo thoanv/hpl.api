@@ -21,8 +21,8 @@ $conn = $db_connection->dbConnection();
 $auth = new Auth($conn,$allHeaders);
 $data = json_decode(file_get_contents('php://input'), true);
 //$data = $_REQUEST;
-$type = trim($data['type']);
-$page = (int)trim($data['page'])  ? $data['page']*5 : 0;
+//$type = trim($data['type']);
+//$page = (int)trim($data['page'])  ? $data['page']*5 : 0;
 $limit = 5;
 
 $returnData = [
@@ -79,11 +79,66 @@ function getStage($conn, $stage_id){
     }
     return false;
 }
-if($auth->isAuth()){
+//if($auth->isAuth()){
     try{
-        $data_user = $auth->isAuth();
-        $user_id = (int)$data_user['user']['ID'];
+//        $data_user = $auth->isAuth();
+//        $user_id = (int)$data_user['user']['ID'];
         $stores = [];
+        //Create table
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $fetch_create_table = "CREATE TABLE hpl_clipboard_signatures (
+            ID_ROW        int(11),
+            STAGE_ID      int(11) default 0,
+            PREVIOUS_STAGE_ID int(11) default 0,
+            XML_ID       text,
+            CREATED_BY    int(11) default 0,
+            UPDATED_BY    int(11) default 0,
+            MOVED_BY      int(11) default 0,
+            CREATED_TIME  datetime,
+            UPDATED_TIME  datetime,
+            MOVED_TIME    datetime,
+            NAME_TASK     varchar(255),
+            ID_TASK       int(11) default 0,
+            IS_SIGN       int(11) default 1,
+            NOTE          text,
+            FILES         text,
+            FILE_ATTACHMENTS  text,
+            SIGN_1       int(11) default 0,
+            SIGN_2        int(11) default 0,
+            SIGN_3        int(11) default 0,
+            SIGN_4        int(11) default 0,
+            SIGN_5        int(11) default 0
+        )";
+        $conn->exec($fetch_create_table);
+        $fetch_drop = "DROP TABLE hpl_clipboard_signatures";
+        $conn->exec($fetch_drop);
+        die;
+        //Insert dữ liệu vào bảng tạm
+        $fetch_insert_data = "INSERT INTO hpl_clipboard_signatures 
+        (ID_ROW, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, NAME_TASK, ID_TASK, IS_SIGN, NOTE, FILES, FILE_ATTACHMENTS, SIGN_1, SIGN_2, SIGN_3, SIGN_4, SIGN_5)
+        SELECT ID, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, UF_RPA_50_NAME, UF_RPA_50_1651045014, UF_RPA_50_1651044962, UF_RPA_50_1650595411, UF_RPA_50_1651045759, UF_RPA_50_1651050342, UF_RPA_50_1651044915, 0, 0, 0, 0
+        FROM b_rpa_items_waeqonmfci WHERE (CREATED_BY=:user_id OR UF_RPA_50_1651050342=:user_id OR UF_RPA_50_1651044915=:user_id)
+
+        UNION
+        SELECT ID, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, UF_RPA_51_NAME, UF_RPA_51_1651045475, UF_RPA_51_1651045447, UF_RPA_51_1650597833, UF_RPA_51_1651045792, UF_RPA_51_1651050471, UF_RPA_51_1650599497, UF_RPA_51_1650599520, 0, 0, 0
+        FROM b_rpa_items_tkqlqlpugi WHERE (CREATED_BY=:user_id OR UF_RPA_51_1650599497=:user_id OR UF_RPA_51_1650599520=:user_id)
+
+        UNION
+        SELECT ID, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, UF_RPA_52_NAME, UF_RPA_52_1651053084, UF_RPA_52_1651053068, UF_RPA_52_1650856223, UF_RPA_52_1651050537, UF_RPA_52_1651050546, UF_RPA_52_1651054407, UF_RPA_52_1651054440, UF_RPA_52_1651054577, 0, 0
+        FROM b_rpa_items_hahljvcncl WHERE (CREATED_BY=:user_id OR UF_RPA_52_1651054407=:user_id OR UF_RPA_52_1651054440=:user_id OR UF_RPA_52_1651054577=:user_id)
+
+        UNION
+        SELECT ID, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, UF_RPA_53_NAME, UF_RPA_53_1651053105, UF_RPA_53_1651053116, UF_RPA_53_1650859105, UF_RPA_53_1651051043, UF_RPA_53_1651051052, UF_RPA_53_1651054750, UF_RPA_53_1651054758, UF_RPA_53_1651054771, 0, 0
+        FROM b_rpa_items_mtpjsbhack WHERE (CREATED_BY=:user_id OR UF_RPA_53_1651054750=:user_id OR UF_RPA_53_1651054758=:user_id OR UF_RPA_53_1651054771=:user_id)
+
+        UNION
+        SELECT ID, STAGE_ID, PREVIOUS_STAGE_ID, XML_ID, CREATED_BY, UPDATED_BY, MOVED_BY, CREATED_TIME, UPDATED_TIME, MOVED_TIME, UF_RPA_54_NAME, UF_RPA_54_1651054296, UF_RPA_54_1651054275, UF_RPA_54_1651054249, UF_RPA_54_1651054180, UF_RPA_54_1651054195, UF_RPA_54_1651113935, UF_RPA_54_1651113954, UF_RPA_54_1651113965, 0, 0 
+        FROM b_rpa_items_zrneigpcdn WHERE (CREATED_BY=:user_id OR UF_RPA_54_1651113935=:user_id OR UF_RPA_54_1651113954=:user_id OR UF_RPA_54_1651113965=:user_id)
+        ";
+        $query = $conn->prepare($fetch_insert_data);
+        $query->bindValue(':user_id', 4068, PDO::PARAM_STR);
+        $query->execute();
+        die;
         $fetch_rpa_type= "SELECT * FROM `b_rpa_type` ORDER BY ID DESC";
         $query_stmt = $conn->prepare($fetch_rpa_type);
         $query_stmt->execute();
@@ -485,11 +540,11 @@ if($auth->isAuth()){
     }catch(PDOException $e){
         $returnData = msg(0,500,$e->getMessage());
     }
-}else{
-    $returnData = [
-        "success" => 2,
-        "status" => 2000,
-        "message" => "Authentication-error",
-    ];
-}
+//}else{
+//    $returnData = [
+//        "success" => 2,
+//        "status" => 2000,
+//        "message" => "Authentication-error",
+//    ];
+//}
 echo json_encode($returnData);

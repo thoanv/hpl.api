@@ -16,6 +16,7 @@ CREATE TABLE `hpl_clipboard_signatures`
     `IS_SIGN`       int(11) default 1,
     `NOTE`          text(),
     `FILES`         text(),
+    `FILE_ATTACHS`  text(),
     `SIGN_1`        int(11) default 0,
     `SIGN_2`        int(11) default 0,
     `SIGN_3`        int(11) default 0,
