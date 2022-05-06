@@ -11,9 +11,6 @@ IncludeModuleLangFile(__FILE__);
 
 class AssetNotify
 {
-
-
-
     /**
      * @param $userSend
      * @param $userReceiver

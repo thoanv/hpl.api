@@ -1,4 +1,17 @@
 <?php
+define('NO_KEEP_STATISTIC', true);
+define('NOT_CHECK_PERMISSIONS',true);
+define('BX_NO_ACCELERATOR_RESET', true);
+define('BX_CRONTAB', true);
+define('STOP_STATISTICS', true);
+define('NO_AGENT_STATISTIC', 'Y');
+define('DisableEventsCheck', true);
+define('NO_AGENT_CHECK', true);
+
+if (empty($_SERVER['DOCUMENT_ROOT'])) {
+    $_SERVER['DOCUMENT_ROOT'] = realpath(__DIR__.'/../../../');
+}
+require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: access");
 header("Access-Control-Allow-Methods: POST");
@@ -15,6 +28,7 @@ function msg($success,$status,$message,$extra = []){
 
 require __DIR__.'/classes/Database.php';
 require __DIR__.'/middlewares/Auth.php';
+require __DIR__.'/classes/AssetNotify.php';
 $allHeaders = getallheaders();
 $db_connection = new Database();
 $conn = $db_connection->dbConnection();
@@ -33,7 +47,15 @@ $returnData = [
     "status" => 401,
     "message" => "Unauthorized"
 ];
-
+$arrayCar = [
+    504=>'Xe Innova 7 chỗ - Biển số: 30F-987.67',
+    505=>'Xe Innova 7 chỗ - Biển số: 30H-015.66',
+    512=>'Thuê xe ngoài'
+];
+$typeCar = [
+    502=>'Xe công ty',
+    503=>'Xe thuê ngoài'
+];
 function getInformationMember($conn, $user_id){
     $link_s3_amazon = 'https://haiphatland-bitrix24.s3.ap-southeast-1.amazonaws.com/';
     $fetch= "SELECT LOGIN, EMAIL, b_user.ID as user_id, LAST_NAME, NAME, WORK_DEPARTMENT, WORK_POSITION, b_file.ID as file_id, b_file.SUBDIR, b_file.FILE_NAME
@@ -273,7 +295,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -298,7 +320,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -445,8 +467,7 @@ if($auth->isAuth()){
                 //1.Đề xuất Vinh danh - 50 - STAGE_ID=144 Trạng thái không Đạt - STAGE_ID=141 Trạng thái Đạt
                 case 'b_rpa_items_waeqonmfci':
                     //Chuyển trạng thái stage
-                    changeStage($conn, $stage_current, $task_id, $rpa_id, $user_id, $stage_status, 'b_rpa_items_waeqonmfci', 144);
-
+                    $changeStage = changeStage($conn, $stage_current, $task_id, $rpa_id, $user_id, $stage_status, 'b_rpa_items_waeqonmfci', 144);
                     $fetch_task = "SELECT * FROM `b_rpa_items_waeqonmfci`  WHERE `ID`=:id_task";
                     $query = $conn->prepare($fetch_task);
                     $query->bindValue(':id_task', $task_id, PDO::PARAM_STR);
@@ -480,7 +501,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -505,7 +526,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -644,7 +665,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -669,7 +690,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -827,7 +848,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -852,7 +873,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -1031,7 +1052,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -1056,7 +1077,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -1197,7 +1218,7 @@ if($auth->isAuth()){
                         $store['checkCreatedByAndUserSig'] = $checkCreatedByAndUserSig;
                     }
                     break;
-                //5.Cấp phát Văn phòng phẩm - 54 - STAGE_ID=173 Trạng thái không Đạt - STAGE_ID=172 Trạng thái Đạt
+                //5.Cấp phát Văn phòng phẩm - 54 - STAGE_ID=170 Trạng thái không Đạt - STAGE_ID=172 Trạng thái Đạt
                 case 'b_rpa_items_zrneigpcdn':
                     //Chuyển trạng thái stage
                     changeStage($conn, $stage_current, $task_id, $rpa_id, $user_id, $stage_status, 'b_rpa_items_zrneigpcdn', 173);
@@ -1235,7 +1256,7 @@ if($auth->isAuth()){
                                 $file = getFile($conn, (int)$v_file);
                                 if($file):
                                     $files[$stt_file]['ID'] = (int)$v_file;
-                                    $files[$stt_file]['NAME'] = $file['FILE_NAME'];
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
                                     $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
                                     $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
                                     $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
@@ -1260,7 +1281,7 @@ if($auth->isAuth()){
                                 $file_a = getFile($conn, (int)$a_file);
                                 if($file_a):
                                     $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
-                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['FILE_NAME'];
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
                                     $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
                                     $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
                                     $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
@@ -1347,6 +1368,488 @@ if($auth->isAuth()){
                             $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_54_1651113965']);
                             $stt_user++;
                             if($user_id == $task['UF_RPA_54_1651113965']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[3]);
+                            endif;
+                        endif;
+
+                        if($stage_current):
+                            $dataTimeLine = [];
+                            $arrStageFrom = [];
+                            $arrStageTo = [];
+                            if($store['PREVIOUS_STAGE']):
+                                $arrStageFrom = [
+                                    'id' => $store['PREVIOUS_STAGE']['ID'],
+                                    'name' => $store['PREVIOUS_STAGE']['NAME'],
+                                ];
+                            endif;
+                            if($store['STAGE']):
+                                $arrStageTo = [
+                                    'id' => $store['STAGE']['ID'],
+                                    'name' => $store['STAGE']['NAME'],
+                                ];
+                            endif;
+                            $stageFrom = (object)$arrStageFrom;
+                            $stageTo = (object)$arrStageTo;
+                            $arrItem = (object)['name'=> $rpa['TITLE']];
+                            $dataTimeLine['item'] = $arrItem;
+                            $dataTimeLine['scope'] ="manual";
+                            $dataTimeLine['stageFrom'] =  $stageFrom;
+                            $dataTimeLine['stageTo'] =  $stageTo;
+                            $date_time_line = [ $rpa_id, $task_id, $date_current, $user_id, '', '', 'stage_change', 'N', json_encode($dataTimeLine, JSON_UNESCAPED_UNICODE)];
+
+                            $sql = "INSERT INTO b_rpa_timeline (`TYPE_ID`, `ITEM_ID`,`CREATED_TIME`, `USER_ID`, `TITLE`, `DESCRIPTION`, `ACTION`, `IS_FIXED`, `DATA`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $conn->prepare($sql)->execute($date_time_line);
+                        endif;
+                        //Lấy thay đổi trạng thái
+                        $sql_timeline = "SELECT * FROM `b_rpa_timeline` WHERE `TYPE_ID`=:id_rpa AND `ITEM_ID`=:item_id";
+                        $query_timeline = $conn->prepare($sql_timeline);
+                        $query_timeline->bindValue(':id_rpa', $rpa_id, PDO::PARAM_STR);
+                        $query_timeline->bindValue(':item_id', $task_id, PDO::PARAM_STR);
+                        $query_timeline->execute();
+                        $stageOfChanges = [];
+                        if($query_timeline->rowCount()){
+                            $query_stages = $query_timeline->fetchAll(PDO::FETCH_ASSOC);
+                            $stt_stage = 0;
+                            foreach ($query_stages as $val):
+                                $s_tage = json_decode($val['DATA'], true);
+                                $stageOfChanges[$stt_stage] = isset($s_tage['stageTo']['id']) ? getStage($conn, $s_tage['stageTo']['id']) : '';
+                                $stt_stage++;
+                            endforeach;
+                        }
+                        $store['stageOfChanges'] = $stageOfChanges;
+                        $store['FILES'] = $files;
+                        $store['USER_SIGS'] = $user_signatures;
+                        $store['checkCreatedByAndUserSig'] = $checkCreatedByAndUserSig;
+                    }
+                    break;
+                //6.Đăng ký đi công tác - 55 - STAGE_ID=179 Trạng thái không Đạt - STAGE_ID=178 Trạng thái Đạt
+                case 'b_rpa_items_vhgqokzymt ':
+                    //Chuyển trạng thái stage
+                    changeStage($conn, $stage_current, $task_id, $rpa_id, $user_id, $stage_status, 'b_rpa_items_vhgqokzymt', 179);
+                    $statge_q = '';
+                    $fetch_task = "SELECT * FROM `b_rpa_items_vhgqokzymt`  WHERE `ID`=:id_task";
+                    $query = $conn->prepare($fetch_task);
+                    $query->bindValue(':id_task', $task_id, PDO::PARAM_STR);
+                    $query->execute();
+                    if ($query->rowCount()) {
+                        $checkCreatedByAndUserSig = false;
+                        $task = $query->fetch(PDO::FETCH_ASSOC);
+                        $store['NAME_RPA'] = $rpa['TITLE'];
+                        $store['ID_RPA'] = $rpa_id;
+                        $store['ID_TASK'] = $task_id;
+                        $store['NAME_TASK'] = $task['UF_RPA_55_NAME'];
+                        $store['NOTE'] = $task['UF_RPA_55_1651130132'];
+                        //$store['FOLLOW'] = $task['UF_RPA_43_1646193110'] ? getInformationMember($conn, $task['UF_RPA_43_1646193110']) : '';
+                        $store['STAGE'] = $task['STAGE_ID'] ? getStage($conn, $task['STAGE_ID']) : '';
+                        if($task['CREATED_BY'])
+                            $store['CREATED_BY'] = getInformationMember($conn, $task['CREATED_BY']);
+
+                        $store['CREATED_AT'] = date('H:i d/m/Y', strtotime($task['CREATED_TIME']));
+                        $store['DOCUMENT_SIGN'] = false;
+                        if($task['UF_RPA_55_1651130145'])
+                            $store['DOCUMENT_SIGN'] = true;
+                        $files = [];
+                        $user_signatures = [];
+                        $count_files = 0;
+                        $data_files = [];
+                        if($task['UF_RPA_55_1651130107']):
+                            $data_files = unserialize($task['UF_RPA_55_1651130107']);
+                            $count_files = count($data_files);
+                            $stt_file = 0;
+                            foreach ($data_files as $v_file):
+                                $file = getFile($conn, (int)$v_file);
+                                if($file):
+                                    $files[$stt_file]['ID'] = (int)$v_file;
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
+                                    $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
+                                    $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
+                                    $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
+                                    $name_file = str_replace(' ', '+', $file['FILE_NAME']);
+                                    $files[$stt_file]['PATH'] = $link_s3_amazon.$file['SUBDIR'].'/'.$name_file;
+                                    $stt_file++;
+                                endif;
+
+                            endforeach;
+                        endif;
+
+                        // File đính kèm
+                        $fileAttachs = [];
+                        $count_files_attachs = 0;
+                        $store['TOTAL_FILE'] = $count_files;
+                        $row_file_attachs = $task['UF_RPA_55_1651130120'];
+                        if(isset($row_file_attachs) && $row_file_attachs):
+                            $data_file_attachs = unserialize($row_file_attachs);
+                            $count_files_attachs = count($data_file_attachs);
+                            $stt_file_attach = 0;
+                            foreach ($data_file_attachs as $a_file):
+                                $file_a = getFile($conn, (int)$a_file);
+                                if($file_a):
+                                    $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
+                                    $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
+                                    $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
+                                    $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
+                                    $name_file = str_replace(' ', '+', $file_a['FILE_NAME']);
+                                    $fileAttachs[$stt_file_attach]['PATH'] = $link_s3_amazon.$file_a['SUBDIR'].'/'.$name_file;
+                                    $stt_file_attach++;
+                                endif;
+
+                            endforeach;
+                        endif;
+                        $store['FILEATTACHS'] = $fileAttachs;
+                        $store['COUNTFILEATTACHS'] = $count_files_attachs;
+
+                        $stt_user = 0;
+                        $sql = "SELECT `ID`, `NAME`, `COLOR`, `SORT` FROM `b_rpa_stage` WHERE `TYPE_ID`=:id_rpa ORDER BY SORT ASC";
+                        $query_stage = $conn->prepare($sql);
+                        $query_stage->bindValue(':id_rpa', $rpa_id, PDO::PARAM_STR);
+                        $query_stage->execute();
+                        $arrIdStage = [];
+
+                        if($query_stage->rowCount()){
+                            $stages = $query_stage->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($stages as $sta):
+                                array_push( $arrIdStage, $sta['ID']);
+                            endforeach;
+                        }
+                        if($task['CREATED_BY'] == $user_id):
+                            array_push($checkStageCurrent, $arrIdStage[0]);
+                        endif;
+                        //NGười ký
+                        if($task['UF_RPA_55_1651130809']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_55_1651130107']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_55_1651130809']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130809']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_55_1651130809']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[1]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_55_1651130823']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_55_1651130107']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_55_1651130823']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130823']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_55_1651130823']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[2]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_55_1651130837']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_55_1651130107']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_55_1651130837']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130837']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_55_1651130837']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[3]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_55_1651130846']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_55_1651130107']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_55_1651130846']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130846']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_55_1651130846']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[4]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_55_1651130858']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_55_1651130107']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_55_1651130858']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130858']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_55_1651130858']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[5]);
+                            endif;
+                        endif;
+                        if($stage_current):
+                            $dataTimeLine = [];
+                            $arrStageFrom = [];
+                            $arrStageTo = [];
+                            if($store['PREVIOUS_STAGE']):
+                                $arrStageFrom = [
+                                    'id' => $store['PREVIOUS_STAGE']['ID'],
+                                    'name' => $store['PREVIOUS_STAGE']['NAME'],
+                                ];
+                            endif;
+                            if($store['STAGE']):
+                                $arrStageTo = [
+                                    'id' => $store['STAGE']['ID'],
+                                    'name' => $store['STAGE']['NAME'],
+                                ];
+                            endif;
+                            $stageFrom = (object)$arrStageFrom;
+                            $stageTo = (object)$arrStageTo;
+                            $arrItem = (object)['name'=> $rpa['TITLE']];
+                            $dataTimeLine['item'] = $arrItem;
+                            $dataTimeLine['scope'] ="manual";
+                            $dataTimeLine['stageFrom'] =  $stageFrom;
+                            $dataTimeLine['stageTo'] =  $stageTo;
+                            $date_time_line = [ $rpa_id, $task_id, $date_current, $user_id, '', '', 'stage_change', 'N', json_encode($dataTimeLine, JSON_UNESCAPED_UNICODE)];
+
+                            $sql = "INSERT INTO b_rpa_timeline (`TYPE_ID`, `ITEM_ID`,`CREATED_TIME`, `USER_ID`, `TITLE`, `DESCRIPTION`, `ACTION`, `IS_FIXED`, `DATA`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $conn->prepare($sql)->execute($date_time_line);
+                        endif;
+                        //Lấy thay đổi trạng thái
+                        $sql_timeline = "SELECT * FROM `b_rpa_timeline` WHERE `TYPE_ID`=:id_rpa AND `ITEM_ID`=:item_id";
+                        $query_timeline = $conn->prepare($sql_timeline);
+                        $query_timeline->bindValue(':id_rpa', $rpa_id, PDO::PARAM_STR);
+                        $query_timeline->bindValue(':item_id', $task_id, PDO::PARAM_STR);
+                        $query_timeline->execute();
+                        $stageOfChanges = [];
+                        if($query_timeline->rowCount()){
+                            $query_stages = $query_timeline->fetchAll(PDO::FETCH_ASSOC);
+                            $stt_stage = 0;
+                            foreach ($query_stages as $val):
+                                $s_tage = json_decode($val['DATA'], true);
+                                $stageOfChanges[$stt_stage] = isset($s_tage['stageTo']['id']) ? getStage($conn, $s_tage['stageTo']['id']) : '';
+                                $stt_stage++;
+                            endforeach;
+                        }
+                        $store['stageOfChanges'] = $stageOfChanges;
+                        $store['FILES'] = $files;
+                        $store['USER_SIGS'] = $user_signatures;
+                        $store['checkCreatedByAndUserSig'] = $checkCreatedByAndUserSig;
+                    }
+                    break;
+                //7.Đăng ký xe ô tô - 14 - STAGE_ID=43 Trạng thái không Đạt - STAGE_ID=42 Trạng thái Đạt
+                case 'b_rpa_items_zvctwovhcl ':
+                    //Chuyển trạng thái stage
+                    changeStage($conn, $stage_current, $task_id, $rpa_id, $user_id, $stage_status, 'b_rpa_items_zvctwovhcl', 43);
+                    $statge_q = '';
+                    $fetch_task = "SELECT * FROM `b_rpa_items_zvctwovhcl`  WHERE `ID`=:id_task";
+                    $query = $conn->prepare($fetch_task);
+                    $query->bindValue(':id_task', $task_id, PDO::PARAM_STR);
+                    $query->execute();
+                    if ($query->rowCount()) {
+                        $checkCreatedByAndUserSig = false;
+                        $task = $query->fetch(PDO::FETCH_ASSOC);
+                        $store['NAME_RPA'] = $rpa['TITLE'];
+                        $store['ID_RPA'] = $rpa_id;
+                        $store['ID_TASK'] = $task_id;
+                        $store['NAME_TASK'] = $task['UF_RPA_14_1630117592'];
+                        $store['NOTE'] = $task['UF_RPA_14_1630123906'];
+                        //Mở rộng đăng ký ô tô
+                        //Mục đích
+                        $store['PURPOSE'] = '';
+                        if(isset($task['UF_RPA_14_1630122555']))
+                            $store['PURPOSE'] = $task['UF_RPA_14_1630122555'];
+                        //Thời gian đi
+                        $store['TIME_START'] = '';
+                        if(isset($task['UF_RPA_14_1630123833']))
+                            $store['TIME_START'] = date('H:i d/m/Y', strtotime($task['UF_RPA_14_1630123833']));
+                        //Thời gian về
+                        $store['TIME_END'] = '';
+                        if(isset($task['UF_RPA_14_1630123881']))
+                            $store['TIME_END'] = date('H:i d/m/Y', strtotime($task['UF_RPA_14_1630123881']));
+                        // Nơi xuất phát
+                        $store['ADDRESS_START'] = '';
+                        if(isset($task['UF_RPA_14_1630123052']))
+                            $store['ADDRESS_START'] = $task['UF_RPA_14_1630123052'];
+
+                        $store['ADDRESS_END'] = '';
+                        if(isset($task['UF_RPA_14_1630123083']))
+                            $store['ADDRESS_END'] = $task['UF_RPA_14_1630123083'];
+                        // Thông tin LOẠI xe
+                        $store['TYPE_CAR'] = '';
+                        if(isset($task['UF_RPA_14_1630122496']))
+                            $store['TYPE_CAR'] = $typeCar[$task['UF_RPA_14_1630122496']];
+                        // Thông tin xe
+                        $store['CAR'] = '';
+                        if(isset($task['UF_RPA_14_1631522705']))
+                            $store['CAR'] = $arrayCar[$task['UF_RPA_14_1631522705']];
+                        // Thông tin DRIVE
+                        $store['DRIVE'] = '';
+                        if(isset($task['UF_RPA_14_1651198584']))
+                            $store['DRIVE'] = getInformationMember($conn, (int)$task['UF_RPA_14_1651198584']);
+                        //$store['FOLLOW'] = $task['UF_RPA_43_1646193110'] ? getInformationMember($conn, $task['UF_RPA_43_1646193110']) : '';
+                        $store['STAGE'] = $task['STAGE_ID'] ? getStage($conn, $task['STAGE_ID']) : '';
+                        if($task['CREATED_BY'])
+                            $store['CREATED_BY'] = getInformationMember($conn, $task['CREATED_BY']);
+
+                        $store['CREATED_AT'] = date('H:i d/m/Y', strtotime($task['CREATED_TIME']));
+                        $store['DOCUMENT_SIGN'] = false;
+                        if($task['UF_RPA_55_1651130145'])
+                            $store['DOCUMENT_SIGN'] = true;
+                        $files = [];
+                        $user_signatures = [];
+                        $count_files = 0;
+                        $data_files = [];
+                        if($task['UF_RPA_14_1651654944']):
+                            $data_files = unserialize($task['UF_RPA_14_1651654944']);
+                            $count_files = count($data_files);
+                            $stt_file = 0;
+                            foreach ($data_files as $v_file):
+                                $file = getFile($conn, (int)$v_file);
+                                if($file):
+                                    $files[$stt_file]['ID'] = (int)$v_file;
+                                    $files[$stt_file]['NAME'] = $file['ORIGINAL_NAME'];
+                                    $files[$stt_file]['SIZE'] = formatSizeUnits($file['FILE_SIZE']);
+                                    $files[$stt_file]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file['TIMESTAMP_X']));
+                                    $files[$stt_file]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $v_file);
+                                    $name_file = str_replace(' ', '+', $file['FILE_NAME']);
+                                    $files[$stt_file]['PATH'] = $link_s3_amazon.$file['SUBDIR'].'/'.$name_file;
+                                    $stt_file++;
+                                endif;
+
+                            endforeach;
+                        endif;
+
+                        // File đính kèm
+                        $fileAttachs = [];
+                        $count_files_attachs = 0;
+                        $store['TOTAL_FILE'] = $count_files;
+                        $row_file_attachs = $task['UF_RPA_14_1651052994'];
+                        if(isset($row_file_attachs) && $row_file_attachs):
+                            $data_file_attachs = unserialize($row_file_attachs);
+                            $count_files_attachs = count($data_file_attachs);
+                            $stt_file_attach = 0;
+                            foreach ($data_file_attachs as $a_file):
+                                $file_a = getFile($conn, (int)$a_file);
+                                if($file_a):
+                                    $fileAttachs[$stt_file_attach]['ID'] = (int)$a_file;
+                                    $fileAttachs[$stt_file_attach]['NAME'] = $file_a['ORIGINAL_NAME'];
+                                    $fileAttachs[$stt_file_attach]['SIZE'] = formatSizeUnits($file_a['FILE_SIZE']);
+                                    $fileAttachs[$stt_file_attach]['CREATED_TIME'] = date('H:i d/m/Y', strtotime($file_a['TIMESTAMP_X']));
+                                    $fileAttachs[$stt_file_attach]['CHECK'] = checkFileSignature($conn, $rpa_id, $task_id, $a_file);
+                                    $name_file = str_replace(' ', '+', $file_a['FILE_NAME']);
+                                    $fileAttachs[$stt_file_attach]['PATH'] = $link_s3_amazon.$file_a['SUBDIR'].'/'.$name_file;
+                                    $stt_file_attach++;
+                                endif;
+
+                            endforeach;
+                        endif;
+                        $store['FILEATTACHS'] = $fileAttachs;
+                        $store['COUNTFILEATTACHS'] = $count_files_attachs;
+
+                        $stt_user = 0;
+                        $sql = "SELECT `ID`, `NAME`, `COLOR`, `SORT` FROM `b_rpa_stage` WHERE `TYPE_ID`=:id_rpa ORDER BY SORT ASC";
+                        $query_stage = $conn->prepare($sql);
+                        $query_stage->bindValue(':id_rpa', $rpa_id, PDO::PARAM_STR);
+                        $query_stage->execute();
+                        $arrIdStage = [];
+
+                        if($query_stage->rowCount()){
+                            $stages = $query_stage->fetchAll(PDO::FETCH_ASSOC);
+                            foreach ($stages as $sta):
+                                array_push( $arrIdStage, $sta['ID']);
+                            endforeach;
+                        }
+                        if($task['CREATED_BY'] == $user_id):
+                            array_push($checkStageCurrent, $arrIdStage[0]);
+                        endif;
+                        //NGười ký
+                        if($task['UF_RPA_14_1651054978']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_14_1651654944']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_14_1651054978']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_14_1651054978']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_14_1651054978']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[1]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_14_1651055111']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_14_1651654944']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_14_1651055111']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_14_1651055111']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_14_1651055111']):
+                                $checkCreatedByAndUserSig = true;
+                                array_push($checkStageCurrent, $arrIdStage[2]);
+                            endif;
+                        endif;
+                        if($task['UF_RPA_14_1651055131']):
+                            $number_signed_files = 0;
+                            if($task['UF_RPA_14_1651654944']):
+                                if(!empty($data_files)):
+                                    foreach ($data_files as $v_file):
+                                        $checkSig = checkFileSignatureByUser($conn, $rpa_id, $task_id, $v_file, $task['UF_RPA_14_1651055131']);
+                                        if($checkSig):
+                                            $number_signed_files++;
+                                        endif;
+                                    endforeach;
+                                endif;
+                            endif;
+                            $user_signatures[$stt_user]['FILE_SIGNATURE'] = $number_signed_files;
+                            $user_signatures[$stt_user]['INFORMATION'] = getInformationMember($conn, (int)$task['UF_RPA_55_1651130837']);
+                            $stt_user++;
+                            if($user_id == $task['UF_RPA_14_1651055131']):
                                 $checkCreatedByAndUserSig = true;
                                 array_push($checkStageCurrent, $arrIdStage[3]);
                             endif;

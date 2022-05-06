@@ -11,6 +11,7 @@ define('NO_AGENT_CHECK', true);
 if (empty($_SERVER['DOCUMENT_ROOT'])) {
     $_SERVER['DOCUMENT_ROOT'] = realpath(__DIR__.'/../../../');
 }
+require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: access");
 header("Access-Control-Allow-Methods: POST");
@@ -18,7 +19,6 @@ header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/hpl.procedure/vendor/autoload.php');
 
-require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 use Aws\S3\S3Client;
 use Aws\S3\Exception\S3Exception;
 function msg($success,$status,$message,$extra = []){
@@ -69,15 +69,28 @@ function getFile($conn, $file_id){
     }
     return false;
 }
-function generateRandomString($length = 5) {
-    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $charactersLength = strlen($characters);
-    $randomString = '';
-    for ($i = 0; $i < $length; $i++) {
-        $randomString .= $characters[rand(0, $charactersLength - 1)];
+function updateIdFileNew($conn, $table, $task_id, $field, $fid, $file_id_old){
+    $sql = "SELECT * FROM ".$table." WHERE `ID`=:task_id";
+    $query = $conn->prepare($sql);
+    $query->bindValue(':task_id', $task_id, PDO::PARAM_STR);
+    $query->execute();
+    if($query->rowCount()){
+        $row = $query->fetch(PDO::FETCH_ASSOC);
+        if($row[$field]){
+            $files = unserialize($row[$field]);
+            $key_ = array_search($file_id_old, $files);
+            $files[$key_] = $fid;
+            $data_update = [
+                'ID' => $task_id,
+                'files' => serialize($files),
+            ];
+            $sql = "UPDATE ".$table." SET ".$field."=:files WHERE ID=:ID";
+            $conn->prepare($sql)->execute($data_update);
+            return true;
+        }
     }
-    return $randomString;
 }
+
 if($auth->isAuth()){
     try{
         $data_user = $auth->isAuth();
@@ -252,71 +265,41 @@ if($auth->isAuth()){
                 if (strpos($bin, '%PDF') !== 0) {
                     throw new Exception('Missing the PDF file signature');
                 }
+                //Lưu 1 file mới => trả lại ID
+                $arrFile= Array(
+                    "name" => $file['ORIGINAL_NAME'],
+                    "size" => $file['FILE_SIZE'],
+                    "tmp_name" => "",
+                    "type" => "application/pdf",
+                    "old_file" => $file['ID'],
+                    "del" => "Y",
+                    "MODULE_ID" => "main",
+                    "description" => "",
+                    "content" => $bin
+                );
+                $fid = CFile::SaveFile($arrFile, "hplSign/", true, true);
+                if($fid > 0){
+                    if($rpa_id == 43){
+                        updateIdFileNew($conn, 'b_rpa_items_dpjcodapov', $task_id, 'UF_RPA_43_1641866971', $fid, $file['ID']);
+                    }
 
-                //Lưu file amazon
-                $s3 = S3Client::factory([
-                    'version' => 'latest',
-                    'region'  => 'ap-southeast-1',
-                    'credentials' => array(
-                        'key' => 'AKIA32PBU75HW4B7RW5L',
-                        'secret'  => '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'
-                    )
-                ]);
-
-                $bucket = 'haiphatland-bitrix24'; //haiphatland-bitrix24
-
-                $path_aws = 'hplSign/'.generateRandomString(5);
-
-                $key = $path_aws.'/'.$file['FILE_NAME'];
-                $key_current = $file['SUBDIR'].'/'.$file['FILE_NAME'];
-
-                try {
-                    //Xóa file Aws
-                    $result = $s3->deleteObject([
-                        'Bucket' => $bucket,
-                        'Key'    => $key_current
-                    ]);
-                    //Thêm mới file Aws
-                    $result_push = $s3->putObject([
-                        'ACL' => 'public-read-write',
-                        'Body' => $bin,
-                        'Bucket' => $bucket,
-                        'Key' => $key,
-                        'ContentType' => 'application/pdf',
-                        'visibility' => 'public',
-    //                                'ContentEncoding' =>  'base64',
-                    ]);
-
-                    $data_file = [
-                        'SUBDIR' => $path_aws,
-                        'id' => $file['ID'],
-                    ];
-                    $sql = "UPDATE b_file SET SUBDIR=:SUBDIR WHERE ID=:id";
-                    $conn->prepare($sql)->execute($data_file);
-                    //$cfile->CleanCache($file['ID']);
-
-                    CFile::CleanCache($file['ID']);
                     $data_history = [
                         'status' => 1,
                         'location_sig' => NULL,
+                        'file_id' => $fid,
                         'id' => $row['id'],
                     ];
-                    $sql = "UPDATE hpl_procedure_histories SET location_sig=:location_sig, status=:status WHERE id=:id";
+                    $sql = "UPDATE hpl_procedure_histories SET location_sig=:location_sig, status=:status, file_id=:file_id WHERE id=:id";
                     $conn->prepare($sql)->execute($data_history);
-                    $returnData['note'] = 'Ký thành công';
-                    $file = getFile($conn, $file_id);
+                    $file = getFile($conn, $fid);
                     if($file) {
                         $name_file = str_replace(' ', '+', $file['FILE_NAME']);
                         $file['PATH'] = $link_s3_amazon.$file['SUBDIR'].'/'.$name_file;
-                        //clearstatcache();
                     }else{
                         $file = [];
                     }
                     $returnData["file"]  = $file;
                     $returnData['note'] = "Ký thành công";
-                   // clearstatcache();
-                } catch (S3Exception $e) {
-                    echo 'Lỗi '.$e->getMessage() . "\n";
                 }
             }
             else{
